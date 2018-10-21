@@ -1,11 +1,28 @@
 #ifndef SANDIA_H
 #define SANDIA_H
 
-#include <netinet/in.h>
+#ifdef _WIN32
+
+#else
+#define _POSIX_C_SOURCE 200112L
 #include <sys/socket.h>
+#include <sys/types.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#endif
+
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdbool.h>
+#include <stdio.h>
+
+#include <unistd.h>
+
+/*
+ Resources:
+ *  https://www.binarytides.com/socket-programming-c-linux-tutorial/
+ */
 
 #ifdef __cplusplus
 extern "C" {
@@ -13,28 +30,40 @@ extern "C" {
 
     typedef enum sandia_error_t {
         success = 1,
-        error_string = -1,
-        error_create_socket
+        error_string = -100,
+        error_create_socket,
+        error_get_host,
+        error_connect,
+        error_socket_not_ready,
+        error_connection
     } sandia_error;
 
     typedef struct sandia_socket_t {
         char* host_address;
-        uint16_t port;
-        int fd;
-        struct sockaddr_in host;
+        char ip_address[128];
+        char* port;
+        int _fd;
+        struct addrinfo** _host;
+        struct addrinfo* _info;
     } sandia_socket;
 
     typedef struct sandia_t {
         /* attributes*/
         sandia_error last_error;
-        sandia_socket sandia_socket;
+        sandia_socket _sandia_socket;
+        bool _is_valid;
 
         char* user_agent;
         size_t user_agent_length;
+
+        char* body;
+        size_t body_length;
     } sandia;
 
-    sandia sandia_create(char*, uint16_t);
+    sandia sandia_create(char*, char*);
+    sandia_error _sandia_setup_socket(sandia*, char*, char*);
     sandia_error sandia_set_user_agent(sandia*, char*);
+    sandia_error sandia_get_request(sandia*, char*);
 
 #ifdef __cplusplus
 }

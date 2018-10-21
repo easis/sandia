@@ -5,21 +5,22 @@
 
 
 int main(int argc, char** argv) {
-    sandia s = sandia_create("127.0.0.1", 80);
+    sandia s = sandia_create("google.com", "80");
     
     if(s.last_error == error_create_socket) {
         printf("error creating socket\n");
         return -1;
     }
     
-    printf("s.sandia_socket host:port = %s:%d\n", s.sandia_socket.host_address, s.sandia_socket.port);
+    printf("s.sandia_socket host:port = %s:%s (ip: %s)\n", s._sandia_socket.host_address, s._sandia_socket.port, s._sandia_socket.ip_address);
     
-    sandia_error se = sandia_set_user_agent(&s, "Mozilla");
-    if(se == success) {
+    if(sandia_set_user_agent(&s, "Mozilla")) {
         printf("s.user_agent = %s (error %d)\n", s.user_agent, s.last_error);
     } else {
         printf("error setting user agent\n");
     }
+    
+    printf("sandia_get_request == %d\n", sandia_get_request(&s, ""));
     
     return (EXIT_SUCCESS);
 }
