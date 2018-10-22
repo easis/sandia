@@ -18,11 +18,7 @@
 #include <stdio.h>
 
 #include <unistd.h>
-
-/*
- Resources:
- *  https://www.binarytides.com/socket-programming-c-linux-tutorial/
- */
+#include <signal.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,7 +31,8 @@ extern "C" {
         error_get_host,
         error_connect,
         error_socket_not_ready,
-        error_connection
+        error_connection,
+        error_not_connected
     } sandia_error;
 
     typedef struct sandia_socket_t {
@@ -43,7 +40,7 @@ extern "C" {
         char ip_address[128];
         char* port;
         int _fd;
-        struct addrinfo** _host;
+        struct addrinfo* _host;
         struct addrinfo* _info;
     } sandia_socket;
 
@@ -61,9 +58,13 @@ extern "C" {
     } sandia;
 
     sandia sandia_create(char*, char*);
+    void sandia_close(sandia*);
     sandia_error _sandia_setup_socket(sandia*, char*, char*);
     sandia_error sandia_set_user_agent(sandia*, char*);
     sandia_error sandia_get_request(sandia*, char*);
+    bool _sandia_send_data(sandia*, char*, size_t);
+    bool _sandia_receive_data(sandia*);
+    bool sandia_is_connected(sandia*);
 
 #ifdef __cplusplus
 }
