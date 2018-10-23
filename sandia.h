@@ -18,7 +18,6 @@
 #include <stdio.h>
 
 #include <unistd.h>
-#include <signal.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,39 +31,66 @@ extern "C" {
         error_connect,
         error_socket_not_ready,
         error_connection,
-        error_not_connected
+        error_not_connected,
+        error_header_limit,
+        error_receive,
+        error_send
     } sandia_error;
+
+    typedef enum request_mode_t {
+        GET,
+        POST
+    } request_mode;
 
     typedef struct sandia_socket_t {
         char* host_address;
-        char ip_address[128];
         char* port;
         int _fd;
         struct addrinfo* _host;
         struct addrinfo* _info;
+        
+        uint32_t receive_buffer_size;
     } sandia_socket;
 
+    typedef struct sandia_header_t {
+        char* key;
+        char* value;
+    } sandia_header;
+
     typedef struct sandia_t {
-        /* attributes*/
         sandia_error last_error;
         sandia_socket _sandia_socket;
         bool _is_valid;
 
-        char* user_agent;
-        size_t user_agent_length;
-
         char* body;
         size_t body_length;
+
+        char* _request;
+        size_t _request_length;
+
+        sandia_header* _headers;
+        uint32_t _header_count;
     } sandia;
 
     sandia sandia_create(char*, char*);
     void sandia_close(sandia*);
     sandia_error _sandia_setup_socket(sandia*, char*, char*);
-    sandia_error sandia_set_user_agent(sandia*, char*);
+
+    sandia_error sandia_forge_request(sandia*, request_mode, char*, char*, size_t);
     sandia_error sandia_get_request(sandia*, char*);
+    sandia_error sandia_post_request(sandia*, char*, char*, size_t);
+
     bool _sandia_send_data(sandia*, char*, size_t);
     bool _sandia_receive_data(sandia*);
+
     bool sandia_is_connected(sandia*);
+
+    bool _sandia_build_request(sandia*, request_mode);
+    bool _sandia_append_request_size(sandia*, char*, size_t);
+    bool _sandia_append_request(sandia* s, char*);
+
+    sandia_error sandia_add_header(sandia*, char*, char*);
+    sandia_error sandia_add_headers(sandia*, sandia_header*, uint32_t);
 
 #ifdef __cplusplus
 }
