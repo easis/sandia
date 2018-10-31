@@ -123,7 +123,8 @@ sandia_error sandia_forge_request(sandia* s, request_mode mode, char* uri, char*
         sandia_append_request_size(s, content, content_length);
     }
 
-    printf("[-- START REQUIEST--]\n%s\n[-- END REQUEST --]\n", s->_request);
+    //printf("[-- START REQUIEST--]\n%s\n[-- END REQUEST --]\n", s->_request);
+    
     if (!sandia_send_data(s, s->_request, s->_request_length)) {
         return error_send;
     }
