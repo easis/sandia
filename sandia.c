@@ -10,14 +10,19 @@ sandia sandia_create(char* host, char* port) {
     sandia _sandia;
     _sandia.last_error = success;
     _sandia._is_valid = false;
+    
+    _sandia.body = NULL;
+    _sandia.body_length = 0;
 
-    _sandia.last_error = _sandia_setup_socket(&_sandia, host, port);
+    _sandia.last_error = sandia_setup_socket(&_sandia, host, port);
     _sandia._is_valid = (_sandia.last_error == success);
     _sandia._sandia_socket.receive_buffer_size = 1024;
 
     _sandia._headers = (sandia_header*) calloc(MAX_HEADER_COUNT, sizeof (sandia_header) * MAX_HEADER_COUNT);
     _sandia._header_count = 0;
-    
+
+    _sandia.version = HTTP_11;
+
     return _sandia;
 }
 
@@ -25,21 +30,21 @@ void sandia_close(sandia* s) {
     freeaddrinfo(s->_sandia_socket._host);
     freeaddrinfo(s->_sandia_socket._info);
     close(s->_sandia_socket._fd);
-    
+
     free(s->body);
     s->body_length = 0;
-    
+
     free(s->_headers);
     s->_header_count = 0;
-    
+
     free(s->_request);
     s->_request_length = 0;
-    
+
     free(s->_sandia_socket.host_address);
     free(s->_sandia_socket.port);
 }
 
-sandia_error _sandia_setup_socket(sandia* s, char* host, char* port) {
+sandia_error sandia_setup_socket(sandia* s, char* host, char* port) {
     sandia_error r = success;
 
     sandia_socket _socket;
@@ -87,17 +92,18 @@ sandia_error sandia_forge_request(sandia* s, request_mode mode, char* uri, char*
 
     char* url_uri = (strlen(uri) > 0 ? uri : "/");
 
-    _sandia_build_request(s, mode);
-    _sandia_append_request(s, url_uri);
-    _sandia_append_request(s, " HTTP/1.1\r\nHost: ");
-    _sandia_append_request(s, s->_sandia_socket.host_address);
-    _sandia_append_request(s, "\r\n");
-    
+    sandia_build_request(s, mode);    
+    sandia_append_request(s, url_uri);    
+    sandia_append_request(s, " ");
+    sandia_append_request(s, sandia_version_to_string(s->version));    
+    sandia_append_request(s, "\r\n");
+
+    sandia_add_header(s, "Host", s->_sandia_socket.host_address);
     sandia_add_header(s, "Connection", "close"); // avoids 'read' socket hang
-    
-    if(mode == POST) {
+
+    if (mode == POST) {
         char header_content_length[16];
-        int l =sprintf(header_content_length, "%d", content_length);
+        int l = sprintf(header_content_length, "%d", content_length);
         header_content_length[l] = 0;
 
         sandia_add_header(s, "Content-Length", header_content_length);
@@ -105,23 +111,24 @@ sandia_error sandia_forge_request(sandia* s, request_mode mode, char* uri, char*
 
     for (int i = 0; i < s->_header_count; i++) {
         sandia_header h = s->_headers[i];
-        _sandia_append_request(s, h.key);
-        _sandia_append_request(s, ": ");
-        _sandia_append_request(s, h.value);
-        _sandia_append_request(s, "\r\n");
+        sandia_append_request(s, h.key);
+        sandia_append_request(s, ": ");
+        sandia_append_request(s, h.value);
+        sandia_append_request(s, "\r\n");
     }
 
-    _sandia_append_request(s, "\r\n");
-    
-    if(content_length > 0) {
-         _sandia_append_request_size(s, content, content_length);
+    sandia_append_request(s, "\r\n");
+
+    if (content_length > 0) {
+        sandia_append_request_size(s, content, content_length);
     }
 
-    if(!_sandia_send_data(s, s->_request, s->_request_length)) {
+    printf("[-- START REQUIEST--]\n%s\n[-- END REQUEST --]\n", s->_request);
+    if (!sandia_send_data(s, s->_request, s->_request_length)) {
         return error_send;
     }
-   
-    if(!_sandia_receive_data(s)) {
+
+    if (!sandia_receive_data(s)) {
         return error_receive;
     }
 
@@ -136,7 +143,7 @@ sandia_error sandia_post_request(sandia* s, char* uri, char* content, size_t con
     return sandia_forge_request(s, POST, uri, content, content_size);
 }
 
-bool _sandia_send_data(sandia* s, char* data, size_t data_length) {
+bool sandia_send_data(sandia* s, char* data, size_t data_length) {
     ssize_t bytes_total = 0, bytes_sent;
     while (bytes_total < data_length) {
         bytes_sent = send(s->_sandia_socket._fd, data + bytes_total, data_length - bytes_total, 0);
@@ -149,27 +156,25 @@ bool _sandia_send_data(sandia* s, char* data, size_t data_length) {
     return (bytes_total == data_length);
 }
 
-bool _sandia_receive_data(sandia* s) {
+bool sandia_receive_data(sandia* s) {
     ssize_t bytes_total = 0, bytes_received, buffer_size = s->_sandia_socket.receive_buffer_size;
     uint32_t num_reads = 1;
-    
-    char* r = (char*) calloc(buffer_size + 1, sizeof(char));
-    if(!r)  {
+
+    char* r = (char*) calloc(buffer_size + 1, sizeof (char));
+    if (!r) {
         return false;
     }
-    
+
     //char r[1024];
     while ((bytes_received = recv(s->_sandia_socket._fd, r + bytes_total, s->_sandia_socket.receive_buffer_size, 0)) > 0) {
         bytes_total += bytes_received;
         num_reads++;
-        
+
         r = (char*) realloc(r, buffer_size * num_reads + 1);
-        if(!r) { 
+        if (!r) {
             return false;
         }
     }
-    
-    r[bytes_total] = 0;
 
     if (bytes_total > 0) {
         s->body_length = bytes_total;
@@ -191,7 +196,7 @@ bool sandia_is_connected(sandia* s) {
 
 const size_t _initial_request_length = 1024;
 
-bool _sandia_build_request(sandia* s, request_mode mode) {
+bool sandia_build_request(sandia* s, request_mode mode) {
     s->_request_length = 0;
     s->_request = (char*) calloc(_initial_request_length, sizeof (char));
 
@@ -215,12 +220,12 @@ bool _sandia_build_request(sandia* s, request_mode mode) {
     return true;
 }
 
-bool _sandia_append_request_size(sandia* s, char* str, size_t str_len) {
-    if(str_len <= 0) {
-         s->last_error = error_string;
-         return false;
+bool sandia_append_request_size(sandia* s, char* str, size_t str_len) {
+    if (str_len <= 0) {
+        s->last_error = error_string;
+        return false;
     }
-    
+
     if (_initial_request_length < (s->_request_length + str_len)) {
         s->_request = (char*) realloc(s->_request, s->_request_length + str_len + 1);
 
@@ -237,8 +242,8 @@ bool _sandia_append_request_size(sandia* s, char* str, size_t str_len) {
     return true;
 }
 
-bool _sandia_append_request(sandia* s, char* str) {
-    return _sandia_append_request_size(s, str, strlen(str));
+bool sandia_append_request(sandia* s, char* str) {
+    return sandia_append_request_size(s, str, strlen(str));
 }
 
 sandia_error sandia_add_header(sandia* s, char* key, char* value) {
@@ -249,11 +254,11 @@ sandia_error sandia_add_header(sandia* s, char* key, char* value) {
     s->_headers[s->_header_count].key = (char*) calloc(strlen(key) + 1, sizeof (char));
     s->_headers[s->_header_count].value = (char*) calloc(strlen(value) + 1, sizeof (char));
 
-    strcpy(s->_headers[s->_header_count].key, key);    
+    strcpy(s->_headers[s->_header_count].key, key);
     strcpy(s->_headers[s->_header_count].value, value);
 
     s->_header_count++;
-    
+
     return success;
 }
 
@@ -266,12 +271,49 @@ sandia_error sandia_add_headers(sandia* s, sandia_header* headers, uint32_t coun
         sandia_header h = headers[i];
         s->_headers[s->_header_count].key = (char*) calloc(strlen(h.key) + 1, sizeof (char));
         s->_headers[s->_header_count].value = (char*) calloc(strlen(h.value) + 1, sizeof (char));
-        
-        strcpy(s->_headers[s->_header_count].key, h.key);        
+
+        strcpy(s->_headers[s->_header_count].key, h.key);
         strcpy(s->_headers[s->_header_count].value, h.value);
 
         s->_header_count++;
     }
-    
+
     return success;
 }
+
+char* sandia_version_to_string(http_version version) {
+    char* str_version= (char*) calloc(16, sizeof (char));
+
+    switch (version) {
+        case HTTP_09:
+            strcpy(str_version, "HTTP/0.9");
+            break;
+        case HTTP_10:
+            strcpy(str_version, "HTTP/1.0");
+            break;
+        case HTTP_20:
+            strcpy(str_version, "HTTP/2.0");
+            break;
+        default:
+        case UNKNOWN:
+        case HTTP_11:
+            strcpy(str_version, "HTTP/1.1");
+            break;
+    }
+
+    return str_version;
+}
+
+ http_version sandia_string_to_version(char* version) {
+     if(strcmp(version, "HTTP/0.9") == 0) {
+         return HTTP_09;
+     }else if(strcmp(version, "HTTP/1.0") == 0) {
+         return HTTP_10;
+     } else if(strcmp(version, "HTTP/1.1") == 0) {
+         return HTTP_11;
+     } else if(strcmp(version, "HTTP/2.0") == 0) {
+         return HTTP_20;
+     } else {
+         return UNKNOWN;
+     }
+ }

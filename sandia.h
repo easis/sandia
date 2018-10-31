@@ -41,6 +41,10 @@ extern "C" {
         GET,
         POST
     } request_mode;
+    
+    typedef enum http_version_t {
+        HTTP_09, HTTP_10, HTTP_11, HTTP_20, UNKNOWN
+    } http_version;
 
     typedef struct sandia_socket_t {
         char* host_address;
@@ -70,24 +74,31 @@ extern "C" {
 
         sandia_header* _headers;
         uint32_t _header_count;
+        
+        http_version version;
     } sandia;
 
+    
+    
     sandia sandia_create(char*, char*);
     void sandia_close(sandia*);
-    sandia_error _sandia_setup_socket(sandia*, char*, char*);
+    sandia_error sandia_setup_socket(sandia*, char*, char*);
 
     sandia_error sandia_forge_request(sandia*, request_mode, char*, char*, size_t);
     sandia_error sandia_get_request(sandia*, char*);
     sandia_error sandia_post_request(sandia*, char*, char*, size_t);
 
-    bool _sandia_send_data(sandia*, char*, size_t);
-    bool _sandia_receive_data(sandia*);
+    bool sandia_send_data(sandia*, char*, size_t);
+    bool sandia_receive_data(sandia*);
 
     bool sandia_is_connected(sandia*);
 
-    bool _sandia_build_request(sandia*, request_mode);
-    bool _sandia_append_request_size(sandia*, char*, size_t);
-    bool _sandia_append_request(sandia* s, char*);
+    bool sandia_build_request(sandia*, request_mode);
+    bool sandia_append_request_size(sandia*, char*, size_t);
+    bool sandia_append_request(sandia* s, char*);
+    
+    char* sandia_version_to_string(http_version);
+    http_version sandia_string_to_version(char*);
 
     sandia_error sandia_add_header(sandia*, char*, char*);
     sandia_error sandia_add_headers(sandia*, sandia_header*, uint32_t);
