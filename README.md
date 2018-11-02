@@ -1,5 +1,5 @@
 # Overview
-Sandia is a simple http only library made in C99, compiled with GCC 8.2 and tested under Antergos.
+Sandia is a simple http only library made in C99, compiled with GCC 8.2 and tested under Antergos and Windows 10 x64.
 
 # Features
   - GET and POST requests
@@ -9,6 +9,9 @@ Sandia is a simple http only library made in C99, compiled with GCC 8.2 and test
 # TODO
   - Better string handling
   - Response parsing (status codes, headers, content)
+  
+# Notes
+In Windows, link to ws2_32 library. If you are using Visual Studio this is not necessary because the pragma in _sandia.h_ but in other compilers (GCC/MinGW) you must add the library in the linker options.
 
 # Examples
 
