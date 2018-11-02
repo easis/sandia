@@ -2,6 +2,9 @@
 #define SANDIA_H
 
 #ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#pragma comment(lib,"ws2_32.lib")
 
 #else
 #define _POSIX_C_SOURCE 200112L
@@ -34,25 +37,32 @@ extern "C" {
         error_not_connected,
         error_header_limit,
         error_receive,
-        error_send
+        error_send,
+        error_host_name
     } sandia_error;
 
     typedef enum request_mode_t {
         GET,
         POST
     } request_mode;
-    
+
     typedef enum http_version_t {
         HTTP_09, HTTP_10, HTTP_11, HTTP_20, UNKNOWN
     } http_version;
 
     typedef struct sandia_socket_t {
+#ifdef _WIN32    
+        WSADATA wsa;
+#endif
         char* host_address;
-        char* port;
-        int _fd;
-        struct addrinfo* _host;
-        struct addrinfo* _info;
+        uint32_t port;
+        char* ip;
         
+        int _fd;
+        struct sockaddr_in _address;
+        struct hostent * _host;
+        struct in_addr **_addresses;
+
         uint32_t receive_buffer_size;
     } sandia_socket;
 
@@ -74,15 +84,15 @@ extern "C" {
 
         sandia_header* _headers;
         uint32_t _header_count;
-        
+
         http_version version;
     } sandia;
 
-    
-    
-    sandia sandia_create(char*, char*);
+
+
+    sandia sandia_create(char*, uint32_t);
     void sandia_close(sandia*);
-    sandia_error sandia_setup_socket(sandia*, char*, char*);
+    sandia_error sandia_setup_socket(sandia*, char*, uint32_t);
 
     sandia_error sandia_forge_request(sandia*, request_mode, char*, char*, size_t);
     sandia_error sandia_get_request(sandia*, char*);
@@ -96,7 +106,7 @@ extern "C" {
     bool sandia_build_request(sandia*, request_mode);
     bool sandia_append_request_size(sandia*, char*, size_t);
     bool sandia_append_request(sandia* s, char*);
-    
+
     char* sandia_version_to_string(http_version);
     http_version sandia_string_to_version(char*);
 

@@ -6,7 +6,7 @@
 int main(int argc, char** argv) {
     if (1) {
         printf("obtain ip address by amazon service\n");
-        sandia s = sandia_create("checkip.amazonaws.com", "80");
+        sandia s = sandia_create("checkip.amazonaws.com", 80);
 
         sandia_get_request(&s, "/");
 
@@ -16,7 +16,7 @@ int main(int argc, char** argv) {
 
     if (1) {
         printf("echo bin get request\n");
-        sandia s = sandia_create("httpbin.org", "80");
+        sandia s = sandia_create("httpbin.org", 80);
 
         // add headers indivually
         sandia_add_header(&s, "Referer", "https://github.com/blau72/sandia");
@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
 
     if (1) {
         printf("echo bin post request\n");
-        sandia s = sandia_create("httpbin.org", "80");
+        sandia s = sandia_create("httpbin.org", 80);
 
         char content[] = "hello=world&happy=christmas";
         sandia_post_request(&s, "/post?foo=bar", content, strlen(content));

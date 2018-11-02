@@ -6,11 +6,11 @@
 #define MAX_REQUEST_LEN (1024*16)
 #define MAX_HEADER_COUNT (256)
 
-sandia sandia_create(char* host, char* port) {
+sandia sandia_create(char* host, uint32_t port) {
     sandia _sandia;
     _sandia.last_error = success;
     _sandia._is_valid = false;
-    
+
     _sandia.body = NULL;
     _sandia.body_length = 0;
 
@@ -27,8 +27,8 @@ sandia sandia_create(char* host, char* port) {
 }
 
 void sandia_close(sandia* s) {
-    freeaddrinfo(s->_sandia_socket._host);
-    freeaddrinfo(s->_sandia_socket._info);
+    //freeaddrinfo(s->_sandia_socket._host);
+    //freeaddrinfo(s->_sandia_socket._info);
     close(s->_sandia_socket._fd);
 
     free(s->body);
@@ -41,39 +41,48 @@ void sandia_close(sandia* s) {
     s->_request_length = 0;
 
     free(s->_sandia_socket.host_address);
-    free(s->_sandia_socket.port);
+    s->_sandia_socket.port = 0;
+
+#ifdef _WIN32
+    WSACleanup();
+#endif
 }
 
-sandia_error sandia_setup_socket(sandia* s, char* host, char* port) {
+sandia_error sandia_setup_socket(sandia* s, char* host, uint32_t port) {
     sandia_error r = success;
+
+#ifdef _WIN32
+    if (WSAStartup(MAKEWORD(2, 2), &s->_sandia_socket.wsa) != 0) {
+        return error_create_socket;
+    }
+#endif
 
     sandia_socket _socket;
     size_t host_length = strlen(host);
     _socket.host_address = (char*) calloc(host_length + 1, sizeof (char));
     strcpy(_socket.host_address, host);
 
-    size_t port_length = strlen(port);
-    _socket.port = (char*) calloc(port_length + 1, sizeof (char));
-    strcpy(_socket.port, port);
+    _socket.port = port;
 
     _socket._fd = socket(AF_INET, SOCK_STREAM, 0);
     if (_socket._fd == -1) {
         return error_create_socket;
     }
 
-    _socket._host = (void*) malloc(sizeof (struct addrinfo));
-    _socket._info = (void*) malloc(sizeof (struct addrinfo));
-    memset(_socket._info, 0, sizeof (struct addrinfo));
-
-    _socket._info->ai_family = AF_UNSPEC;
-    _socket._info->ai_socktype = SOCK_STREAM;
-    _socket._info->ai_protocol = IPPROTO_TCP;
-
-    int ret_addr = getaddrinfo(_socket.host_address, _socket.port, _socket._info, &_socket._host);
-    if (ret_addr != 0) {
-        //printf("getaddrinfo failed with error %d (%s)\n", ret_addr, gai_strerror(ret_addr));
-        return error_get_host;
+    _socket._host = gethostbyname(_socket.host_address);
+    if (_socket._host == NULL) {
+        return error_host_name;
     }
+
+    _socket._addresses = (struct in_addr **) _socket._host->h_addr_list;
+    _socket.ip = (char*) calloc(128, sizeof (char));
+    for (int i = 0; _socket._addresses[i] != NULL; i++) {
+        strcpy(_socket.ip, inet_ntoa(*_socket._addresses[i]));
+    }
+    
+    _socket._address.sin_addr.s_addr = inet_addr(_socket.ip);
+    _socket._address.sin_family = AF_INET;
+    _socket._address.sin_port = htons(_socket.port);
 
     s->_sandia_socket = _socket;
 
@@ -85,17 +94,17 @@ sandia_error sandia_forge_request(sandia* s, request_mode mode, char* uri, char*
         return error_socket_not_ready;
     }
 
-    int ret_sock = connect(s->_sandia_socket._fd, s->_sandia_socket._host->ai_addr, s->_sandia_socket._host->ai_addrlen);
+    int ret_sock = connect(s->_sandia_socket._fd, (struct sockaddr *) &s->_sandia_socket._address, sizeof (s->_sandia_socket._address));
     if (ret_sock < 0) {
         return error_connection;
     }
 
     char* url_uri = (strlen(uri) > 0 ? uri : "/");
 
-    sandia_build_request(s, mode);    
-    sandia_append_request(s, url_uri);    
+    sandia_build_request(s, mode);
+    sandia_append_request(s, url_uri);
     sandia_append_request(s, " ");
-    sandia_append_request(s, sandia_version_to_string(s->version));    
+    sandia_append_request(s, sandia_version_to_string(s->version));
     sandia_append_request(s, "\r\n");
 
     sandia_add_header(s, "Host", s->_sandia_socket.host_address);
@@ -124,7 +133,7 @@ sandia_error sandia_forge_request(sandia* s, request_mode mode, char* uri, char*
     }
 
     //printf("[-- START REQUIEST--]\n%s\n[-- END REQUEST --]\n", s->_request);
-    
+
     if (!sandia_send_data(s, s->_request, s->_request_length)) {
         return error_send;
     }
@@ -283,7 +292,7 @@ sandia_error sandia_add_headers(sandia* s, sandia_header* headers, uint32_t coun
 }
 
 char* sandia_version_to_string(http_version version) {
-    char* str_version= (char*) calloc(16, sizeof (char));
+    char* str_version = (char*) calloc(16, sizeof (char));
 
     switch (version) {
         case HTTP_09:
@@ -305,16 +314,16 @@ char* sandia_version_to_string(http_version version) {
     return str_version;
 }
 
- http_version sandia_string_to_version(char* version) {
-     if(strcmp(version, "HTTP/0.9") == 0) {
-         return HTTP_09;
-     }else if(strcmp(version, "HTTP/1.0") == 0) {
-         return HTTP_10;
-     } else if(strcmp(version, "HTTP/1.1") == 0) {
-         return HTTP_11;
-     } else if(strcmp(version, "HTTP/2.0") == 0) {
-         return HTTP_20;
-     } else {
-         return UNKNOWN;
-     }
- }
+http_version sandia_string_to_version(char* version) {
+    if (strcmp(version, "HTTP/0.9") == 0) {
+        return HTTP_09;
+    } else if (strcmp(version, "HTTP/1.0") == 0) {
+        return HTTP_10;
+    } else if (strcmp(version, "HTTP/1.1") == 0) {
+        return HTTP_11;
+    } else if (strcmp(version, "HTTP/2.0") == 0) {
+        return HTTP_20;
+    } else {
+        return UNKNOWN;
+    }
+}
