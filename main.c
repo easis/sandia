@@ -8,13 +8,13 @@ int main(int argc, char** argv) {
         printf("obtain ip address by amazon service\n");
         sandia s = sandia_create("checkip.amazonaws.com", 80);
 
-        sandia_get_request(&s, "/");
+        sandia_response response = sandia_get_request(&s, "/");
 
-        printf("%s\n", s.body);
+        printf("%s\n", response.body);
         sandia_close(&s);
     }
 
-    if (1) {
+    if (0) {
         printf("echo bin get request\n");
         sandia s = sandia_create("httpbin.org", 80);
 
@@ -28,20 +28,20 @@ int main(int argc, char** argv) {
         };
         sandia_add_headers(&s, headers, sizeof (headers) / sizeof (sandia_header));
 
-        sandia_get_request(&s, "/get?foo=bar");
+        sandia_response response = sandia_get_request(&s, "/get?foo=bar");
 
-        printf("%s\n", s.body);
+        printf("%s\n", response.body);
         sandia_close(&s);
     }
 
-    if (1) {
+    if (0) {
         printf("echo bin post request\n");
         sandia s = sandia_create("httpbin.org", 80);
 
         char content[] = "hello=world&happy=christmas";
-        sandia_post_request(&s, "/post?foo=bar", content, strlen(content));
+        sandia_response response = sandia_post_request(&s, "/post?foo=bar", content, strlen(content));
 
-        printf("%s\n", s.body);
+        printf("%s\n", response.body);
         sandia_close(&s);
     }
 
